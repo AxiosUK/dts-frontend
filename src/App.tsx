@@ -19,6 +19,12 @@ import {
   Typography,
 } from "@mui/material";
 import {
+  ClearRounded,
+  ViewListRounded,
+  ViewKanbanRounded,
+  Add,
+} from "@mui/icons-material";
+import {
   DataGrid,
   type GridColDef,
   type GridRenderCellParams,
@@ -26,12 +32,10 @@ import {
 import type Task from "./models/task";
 import { fetchTasks } from "./api/api";
 import { demoTasks } from "./models/demoTasks";
-import {
-  ClearRounded,
-  ViewListRounded,
-  ViewKanbanRounded,
-  Add,
-} from "@mui/icons-material";
+import dayjs from "dayjs";
+import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
+import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
+import { DateTimePicker } from "@mui/x-date-pickers/DateTimePicker";
 
 function App() {
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -344,6 +348,9 @@ function App() {
                 slotProps={{
                   input: { readOnly: isReadOnly },
                 }}
+                onChange={(e) =>
+                  setSelectedTask({ ...selectedTask, title: e.target.value })
+                }
               />
               <TextField
                 label="Description"
@@ -354,6 +361,12 @@ function App() {
                 slotProps={{
                   input: { readOnly: isReadOnly },
                 }}
+                onChange={(e) =>
+                  setSelectedTask({
+                    ...selectedTask,
+                    description: e.target.value,
+                  })
+                }
               />
               <ToggleButtonGroup
                 color="primary"
@@ -371,14 +384,18 @@ function App() {
                 <ToggleButton value="in progress">In progress</ToggleButton>
                 <ToggleButton value="completed">Completed</ToggleButton>
               </ToggleButtonGroup>
-              <TextField
-                label="Due Date"
-                value={new Date(selectedTask.dueDate).toLocaleString()}
-                fullWidth
-                slotProps={{
-                  input: { readOnly: isReadOnly },
-                }}
-              />
+              <LocalizationProvider dateAdapter={AdapterDayjs}>
+                <DateTimePicker
+                  label="Due Date"
+                  value={dayjs(selectedTask.dueDate)}
+                  onChange={(newValue) =>
+                    setSelectedTask({
+                      ...selectedTask,
+                      dueDate: newValue?.toDate() ?? new Date(),
+                    })
+                  }
+                />
+              </LocalizationProvider>
             </Stack>
           ) : (
             <Typography variant="body1">No task selected.</Typography>
