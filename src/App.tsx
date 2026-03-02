@@ -4,13 +4,17 @@ import {
   Box,
   Button,
   Card,
+  CardActions,
+  CardContent,
   Chip,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
+  Divider,
   IconButton,
   InputAdornment,
+  Popover,
   Stack,
   TextField,
   ToggleButton,
@@ -23,6 +27,7 @@ import {
   ViewListRounded,
   ViewKanbanRounded,
   Add,
+  Settings,
 } from "@mui/icons-material";
 import {
   DataGrid,
@@ -37,6 +42,15 @@ import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 import { DateTimePicker } from "@mui/x-date-pickers/DateTimePicker";
 
+const dataColumns = [
+  { field: "title", view: true },
+  { field: "description", view: true },
+  { field: "status", view: true },
+  { field: "dueDate", view: true },
+  { field: "createdAt", view: false },
+  { field: "modifiedAt", view: false },
+];
+
 function App() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [search, setSearch] = useState("");
@@ -44,6 +58,12 @@ function App() {
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isReadOnly, setIsReadOnly] = useState(true);
+  const [viewColumns, setViewColumns] =
+    useState<{ field: string; view: boolean }[]>(dataColumns);
+  const [settingsAnchorEl, setSettingsAnchorEl] = useState<null | HTMLElement>(
+    null,
+  );
+  const isSettingsOpen = Boolean(settingsAnchorEl);
 
   const statuses = useMemo(() => {
     return ["pending", "in progress", "completed"] as const;
@@ -55,87 +75,165 @@ function App() {
     );
   };
 
+  const handleCancel = () => {
+    // If editing an existing task, revert the selectedTask to the stored task
+    if (selectedTask?._id) {
+      const original = tasks.find((t) => t._id === selectedTask._id) ?? null;
+      setSelectedTask(original);
+      setIsReadOnly(true);
+      // keep dialog open so user can view (read-only)
+    } else {
+      // New task creation was cancelled
+      setSelectedTask(null);
+      setIsReadOnly(true);
+      setIsDialogOpen(false);
+    }
+  };
+
+  const handleSave = () => {
+    if (!selectedTask) return;
+
+    const now = new Date();
+
+    if (selectedTask._id) {
+      // update existing task
+      setTasks((prev) =>
+        prev.map((t) =>
+          t._id === selectedTask._id ? { ...selectedTask, modifiedAt: now } : t,
+        ),
+      );
+      setSelectedTask({ ...selectedTask, modifiedAt: now });
+    } else {
+      // create new task
+      const id = Math.random().toString(36).substr(2, 9);
+      const newTask: Task = {
+        ...selectedTask,
+        _id: id,
+        createdAt: now,
+        modifiedAt: now,
+      };
+      setTasks((prev) => [newTask, ...prev]);
+      setSelectedTask(newTask);
+    }
+
+    setIsReadOnly(true);
+    setIsDialogOpen(false);
+  };
+
   const columns: GridColDef<Task>[] = useMemo(
-    () => [
-      {
-        field: "title",
-        headerName: "Title",
-        flex: 1,
-        minWidth: 260,
-      },
-      {
-        field: "description",
-        headerName: "Description",
-        flex: 2,
-        minWidth: 200,
-        valueGetter: (_value, row) =>
-          String(row.description ?? "").substring(0, 60) + "...",
-        sortable: false,
-      },
-      {
-        field: "status",
-        headerName: "Status",
-        width: 140,
-        renderCell: (params: GridRenderCellParams<Task, Task["status"]>) => {
-          const value = params.value;
-          const chipColor =
-            value === "completed"
-              ? "success"
-              : value === "in progress"
-              ? "info"
-              : "warning";
+    () =>
+      [
+        ...(viewColumns.find((c) => c.field === "title")?.view
+          ? [
+              {
+                field: "title",
+                headerName: "Title",
+                flex: 1,
+              },
+            ]
+          : []),
+        ...(viewColumns.find((c) => c.field === "description")?.view
+          ? [
+              {
+                field: "description",
+                headerName: "Description",
+                flex: 2,
+                // valueGetter: (params: any) => {
+                //   const desc = params?.row?.description ?? params?.value ?? "";
+                //   return String(desc).substring(0, 60) + "...";
+                // },
+                sortable: false,
+              },
+            ]
+          : []),
+        ...(viewColumns.find((c) => c.field === "status")?.view
+          ? [
+              {
+                field: "status",
+                headerName: "Status",
+                width: 140,
+                renderCell: (
+                  params: GridRenderCellParams<Task, Task["status"]>,
+                ) => {
+                  const value = params.value;
+                  const chipColor =
+                    value === "completed"
+                      ? "success"
+                      : value === "in progress"
+                      ? "info"
+                      : "warning";
 
-          const label =
-            value === "in progress"
-              ? "In progress"
-              : value === "completed"
-              ? "Completed"
-              : "Pending";
+                  const label =
+                    value === "in progress"
+                      ? "In progress"
+                      : value === "completed"
+                      ? "Completed"
+                      : "Pending";
 
-          return (
-            <Chip
-              size="small"
-              sx={{ justifySelf: "center" }}
-              label={label}
-              color={chipColor}
-            />
-          );
-        },
-      },
-      {
-        field: "dueDate",
-        headerName: "Due",
-        type: "dateTime",
-        width: 180,
-        valueGetter: (_value, row) =>
-          row.dueDate instanceof Date ? row.dueDate : new Date(row.dueDate),
-      },
-      {
-        field: "createdAt",
-        headerName: "Created",
-        type: "dateTime",
-        width: 180,
-        valueGetter: (_value, row) =>
-          row.createdAt instanceof Date
-            ? row.createdAt
-            : row.createdAt
-            ? new Date(row.createdAt)
-            : new Date(),
-      },
-      {
-        field: "modifiedAt",
-        headerName: "Modified",
-        type: "dateTime",
-        width: 180,
-        valueGetter: (_value, row) =>
-          row.modifiedAt instanceof Date
-            ? row.modifiedAt
-            : row.modifiedAt
-            ? new Date(row.modifiedAt)
-            : new Date(),
-      },
-    ],
-    [],
+                  return (
+                    <Chip
+                      size="small"
+                      sx={{ justifySelf: "center" }}
+                      label={label}
+                      color={chipColor}
+                    />
+                  );
+                },
+              },
+            ]
+          : []),
+        ...(viewColumns.find((c) => c.field === "dueDate")?.view
+          ? [
+              {
+                field: "dueDate",
+                headerName: "Due",
+                type: "dateTime",
+                width: 180,
+                valueGetter: (params: any) => {
+                  const raw = params?.row?.dueDate ?? params?.value;
+                  return raw instanceof Date ? raw : raw ? new Date(raw) : null;
+                },
+              },
+            ]
+          : []),
+        ...(viewColumns.find((c) => c.field === "createdAt")?.view
+          ? [
+              {
+                field: "createdAt",
+                headerName: "Created",
+                type: "dateTime",
+                width: 180,
+                valueGetter: (params: any) => {
+                  const raw = params?.row?.createdAt ?? params?.value;
+                  return raw instanceof Date
+                    ? raw
+                    : raw
+                    ? new Date(raw)
+                    : new Date();
+                },
+              },
+            ]
+          : []),
+        ...(viewColumns.find((c) => c.field === "modifiedAt")?.view
+          ? [
+              {
+                field: "modifiedAt",
+                headerName: "Modified",
+                type: "dateTime",
+                width: 180,
+                valueGetter: (params: any) => {
+                  const raw = params?.row?.modifiedAt ?? params?.value;
+                  return raw instanceof Date
+                    ? raw
+                    : raw
+                    ? new Date(raw)
+                    : new Date();
+                },
+              },
+            ]
+          : []),
+      ].filter(Boolean) as GridColDef<Task>[],
+    [viewColumns],
   );
 
   const filteredTasks = useMemo(() => {
@@ -171,8 +269,7 @@ function App() {
         direction="row"
         spacing={2}
         justifyContent={"space-between"}
-        mb={2}
-      >
+        mb={2}>
         <Typography variant="h5" component="h5">
           DTS Case Worker Tasks
         </Typography>
@@ -189,8 +286,7 @@ function App() {
               dueDate: new Date(),
             });
             setIsDialogOpen(true);
-          }}
-        >
+          }}>
           New Task
         </Button>
       </Stack>
@@ -222,25 +318,28 @@ function App() {
             if (newView !== null) {
               setView(newView);
             }
-          }}
-        >
+          }}>
           <Tooltip
             title="List view with sorting and pagination"
-            placement="top"
-          >
+            placement="top">
             <ToggleButton value="list" sx={{ width: 56 }}>
               <ViewListRounded />
             </ToggleButton>
           </Tooltip>
           <Tooltip
             title="Kanban-style board for drag-and-drop task management"
-            placement="top"
-          >
+            placement="top">
             <ToggleButton value="kanban" sx={{ width: 56 }}>
               <ViewKanbanRounded />
             </ToggleButton>
           </Tooltip>
         </ToggleButtonGroup>
+        <IconButton
+          color="primary"
+          sx={{ width: 56 }}
+          onClick={(e) => setSettingsAnchorEl(e.currentTarget)}>
+          <Settings />
+        </IconButton>
       </Stack>
       <Box flexGrow={1} sx={{ mt: 2, height: 560, width: "100%" }}>
         {view === "list" && filteredTasks.length ? (
@@ -285,8 +384,7 @@ function App() {
                     e.dataTransfer.getData("text/plain");
                   if (!taskId) return;
                   moveTaskToStatus(taskId, status);
-                }}
-              >
+                }}>
                 <Typography variant="h6" component="h6" mb={1}>
                   {status.toUpperCase()}
                 </Typography>
@@ -298,7 +396,6 @@ function App() {
                         key={task._id}
                         variant="elevation"
                         elevation={2}
-                        sx={{ p: 1 }}
                         draggable
                         onDragStart={(e) => {
                           e.dataTransfer.setData(
@@ -307,22 +404,43 @@ function App() {
                           );
                           e.dataTransfer.setData("text/plain", task._id ?? "");
                           e.dataTransfer.effectAllowed = "move";
-                        }}
-                      >
-                        <Typography variant="subtitle1" component="h3">
-                          {task.title}
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary">
-                          Due:{" "}
-                          {new Date(task.dueDate).toLocaleDateString(
-                            undefined,
-                            {
-                              year: "numeric",
-                              month: "short",
-                              day: "numeric",
-                            },
-                          )}
-                        </Typography>
+                        }}>
+                        <CardContent sx={{ p: 1 }}>
+                          <Typography variant="subtitle1" component="h3">
+                            {task.title}
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary">
+                            Due:{" "}
+                            {new Date(task.dueDate).toLocaleDateString(
+                              undefined,
+                              {
+                                year: "numeric",
+                                month: "short",
+                                day: "numeric",
+                              },
+                            )}
+                          </Typography>
+                        </CardContent>
+                        <CardActions>
+                          <Button
+                            size="small"
+                            onClick={() => {
+                              setSelectedTask(task);
+                              setIsReadOnly(true);
+                              setIsDialogOpen(true);
+                            }}>
+                            View
+                          </Button>
+                          <Button
+                            size="small"
+                            onClick={() => {
+                              setSelectedTask(task);
+                              setIsReadOnly(false);
+                              setIsDialogOpen(true);
+                            }}>
+                            Edit
+                          </Button>
+                        </CardActions>
                       </Card>
                     ))}
                 </Stack>
@@ -335,8 +453,7 @@ function App() {
         open={isDialogOpen}
         onClose={() => setIsDialogOpen(false)}
         maxWidth="md"
-        fullWidth
-      >
+        fullWidth>
         <DialogTitle>Task Details</DialogTitle>
         <DialogContent>
           {selectedTask ? (
@@ -378,16 +495,22 @@ function App() {
                   if (newStatus) {
                     setSelectedTask({ ...selectedTask, status: newStatus });
                   }
-                }}
-              >
-                <ToggleButton value="pending">Pending</ToggleButton>
-                <ToggleButton value="in progress">In progress</ToggleButton>
-                <ToggleButton value="completed">Completed</ToggleButton>
+                }}>
+                <ToggleButton value="pending" fullWidth>
+                  Pending
+                </ToggleButton>
+                <ToggleButton value="in progress" fullWidth>
+                  In progress
+                </ToggleButton>
+                <ToggleButton value="completed" fullWidth>
+                  Completed
+                </ToggleButton>
               </ToggleButtonGroup>
               <LocalizationProvider dateAdapter={AdapterDayjs}>
                 <DateTimePicker
                   label="Due Date"
                   value={dayjs(selectedTask.dueDate)}
+                  readOnly={isReadOnly}
                   onChange={(newValue) =>
                     setSelectedTask({
                       ...selectedTask,
@@ -403,33 +526,67 @@ function App() {
         </DialogContent>
         <DialogActions>
           {isReadOnly ? (
-            <Button
-              onClick={() => setIsReadOnly(false)}
-              color="primary"
-              variant="outlined"
-            >
-              Edit
-            </Button>
-          ) : (
             <>
               <Button
-                onClick={() => setIsReadOnly(true)}
-                color="inherit"
-                variant="outlined"
-              >
-                Cancel
+                onClick={() => setIsReadOnly(false)}
+                color="primary"
+                variant="outlined">
+                Edit
               </Button>
               <Button
-                onClick={() => setIsReadOnly(true)}
-                color="primary"
-                variant="contained"
-              >
+                onClick={() => setIsDialogOpen(false)}
+                color="inherit"
+                variant="outlined">
+                Close
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button onClick={handleCancel} color="inherit" variant="outlined">
+                Cancel
+              </Button>
+              <Button onClick={handleSave} color="primary" variant="contained">
                 Save
               </Button>
             </>
           )}
         </DialogActions>
       </Dialog>
+      <Popover
+        open={isSettingsOpen}
+        anchorEl={settingsAnchorEl}
+        onClose={() => setSettingsAnchorEl(null)}
+        anchorOrigin={{
+          vertical: "bottom",
+          horizontal: "right",
+        }}>
+        <Box sx={{ width: 240 }}>
+          <Typography
+            variant="h6"
+            component="h3"
+            sx={{ p: 2 }}
+            textAlign={"center"}>
+            Column Visibility
+          </Typography>
+          <Divider />
+          <Stack spacing={1} sx={{ p: 2 }}>
+            {viewColumns.map((col) => (
+              <Chip
+                key={col.field}
+                label={col.field}
+                color={col.view ? "primary" : "default"}
+                onClick={() => {
+                  setViewColumns((prev) =>
+                    prev.map((c) =>
+                      c.field === col.field ? { ...c, view: !c.view } : c,
+                    ),
+                  );
+                }}
+              />
+            ))}
+          </Stack>
+        </Box>
+      </Popover>
     </Stack>
   );
 }
