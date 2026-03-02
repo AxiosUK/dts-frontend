@@ -1,0 +1,73 @@
+name: Release
+
+on:
+  #   push:
+  #     branches:
+  #       - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm install
+
+      - name: Version with Changesets
+        run: npx changeset version
+
+      - name: Update package-lock.json version
+        run: |
+          if [ -f package-lock.json ]; then
+            node -e "const p=require('./package.json'); const f=require('./package-lock.json'); f.version=p.version; require('fs').writeFileSync('package-lock.json', JSON.stringify(f,null,2)); console.log('package-lock.json updated to', p.version);"
+          else
+            echo "package-lock.json not found, skipping"
+          fi
+
+      - name: Commit and tag if version changed
+        run: |
+          if [[ -n "$(git status --porcelain)" ]]; then
+            VERSION=$(node -p "require('./package.json').version")
+            git config user.name "github-actions"
+            git config user.email "github-actions@github.com"
+            git add .
+            git commit -m "chore(release): v$VERSION"
+            git tag v$VERSION
+            git push origin main --tags
+          else
+            echo "No version changes detected – skipping release."
+          fi
+
+      - name: Update docker-compose image + semver label
+        if: always()
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git checkout main
+          git pull origin main
+          # Replace image tag
+          sed -i "s|image: axiosuk/dts-frontend:.*|image: axiosuk/dts-frontend:${VERSION}|" docker-compose.yaml
+          # Add or update semver label under the service
+          if ! grep -q "org.opencontainers.image.version" docker-compose.yaml; then
+            sed -i "/image: axiosuk\/dts-frontend:${VERSION}/a\    labels:\n      - \"org.opencontainers.image.version=${VERSION}\"" docker-compose.yaml
+          else
+            sed -i "s|org.opencontainers.image.version=.*|org.opencontainers.image.version=${VERSION}|" docker-compose.yaml || true
+          fi
+          git add docker-compose.yaml
+          git commit -m "chore(release): docker-compose semver ${VERSION}" || echo "no docker-compose changes"
+          git push origin main
