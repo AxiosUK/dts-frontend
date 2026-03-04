@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import "./App.css";
 import {
+  Alert,
   Box,
   Button,
   Card,
@@ -11,10 +12,10 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
-  Divider,
   IconButton,
   InputAdornment,
-  Popover,
+  Skeleton,
+  Snackbar,
   Stack,
   TextField,
   ToggleButton,
@@ -27,11 +28,17 @@ import {
   ViewListRounded,
   ViewKanbanRounded,
   Add,
-  Settings,
+  NotificationImportantRounded,
+  VisibilityRounded,
+  EditRounded,
+  DeleteRounded,
 } from "@mui/icons-material";
 import {
   DataGrid,
+  GridToolbar,
+  type GridColumnVisibilityModel,
   type GridColDef,
+  type GridPaginationModel,
   type GridRenderCellParams,
 } from "@mui/x-data-grid";
 import type Task from "./models/task";
@@ -42,15 +49,6 @@ import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 import { DateTimePicker } from "@mui/x-date-pickers/DateTimePicker";
 
-const dataColumns = [
-  { field: "title", view: true },
-  { field: "description", view: true },
-  { field: "status", view: true },
-  { field: "dueDate", view: true },
-  { field: "createdAt", view: false },
-  { field: "modifiedAt", view: false },
-];
-
 function App() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [search, setSearch] = useState("");
@@ -58,12 +56,30 @@ function App() {
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isReadOnly, setIsReadOnly] = useState(true);
-  const [viewColumns, setViewColumns] =
-    useState<{ field: string; view: boolean }[]>(dataColumns);
-  const [settingsAnchorEl, setSettingsAnchorEl] = useState<null | HTMLElement>(
-    null,
+  const [isUsingDemoData, setIsUsingDemoData] = useState(false);
+
+  const [columnVisibilityModel, setColumnVisibilityModel] =
+    useState<GridColumnVisibilityModel>({
+      title: true,
+      description: true,
+      status: true,
+      dueDate: true,
+      createdAt: false,
+      modifiedAt: false,
+      actions: true,
+    });
+
+  const pageSizeStorageKey = "dts.tasksGrid.pageSize";
+  const [paginationModel, setPaginationModel] = useState<GridPaginationModel>(
+    () => {
+      const stored = sessionStorage.getItem(pageSizeStorageKey);
+      const pageSize = stored ? Number.parseInt(stored, 10) : 10;
+      return {
+        page: 0,
+        pageSize: Number.isFinite(pageSize) ? pageSize : 10,
+      };
+    },
   );
-  const isSettingsOpen = Boolean(settingsAnchorEl);
 
   const statuses = useMemo(() => {
     return ["pending", "in progress", "completed"] as const;
@@ -120,120 +136,226 @@ function App() {
     setIsDialogOpen(false);
   };
 
+  const toDate = (raw: unknown): Date | null => {
+    if (raw instanceof Date) return raw;
+    if (typeof raw === "string" || typeof raw === "number")
+      return new Date(raw);
+    return null;
+  };
+
+  const formatRelativeDue = (due: Date, status: Task["status"]): string => {
+    const diffMs = due.getTime() - Date.now();
+    const absSeconds = Math.abs(diffMs) / 1000;
+
+    if (absSeconds < 45) {
+      return status === "completed" ? "due just now" : "due now";
+    }
+
+    let unit: "minute" | "hour" | "day" = "day";
+    let count = 0;
+
+    if (absSeconds < 60 * 60) {
+      unit = "minute";
+      count = Math.max(1, Math.round(absSeconds / 60));
+    } else if (absSeconds < 60 * 60 * 24) {
+      unit = "hour";
+      count = Math.max(1, Math.round(absSeconds / (60 * 60)));
+    } else {
+      unit = "day";
+      count = Math.max(1, Math.round(absSeconds / (60 * 60 * 24)));
+    }
+
+    const plural = count === 1 ? "" : "s";
+
+    if (diffMs >= 0) {
+      return `in ${count} ${unit}${plural}`;
+    }
+
+    // Only show "late" when the task isn't completed.
+    if (status !== "completed") {
+      return `${count} ${unit}${plural} late`;
+    }
+
+    return `${count} ${unit}${plural} ago`;
+  };
+
   const columns: GridColDef<Task>[] = useMemo(
-    () =>
-      [
-        ...(viewColumns.find((c) => c.field === "title")?.view
-          ? [
-              {
-                field: "title",
-                headerName: "Title",
-                flex: 1,
-              },
-            ]
-          : []),
-        ...(viewColumns.find((c) => c.field === "description")?.view
-          ? [
-              {
-                field: "description",
-                headerName: "Description",
-                flex: 2,
-                // valueGetter: (params: any) => {
-                //   const desc = params?.row?.description ?? params?.value ?? "";
-                //   return String(desc).substring(0, 60) + "...";
-                // },
-                sortable: false,
-              },
-            ]
-          : []),
-        ...(viewColumns.find((c) => c.field === "status")?.view
-          ? [
-              {
-                field: "status",
-                headerName: "Status",
-                width: 140,
-                renderCell: (
-                  params: GridRenderCellParams<Task, Task["status"]>,
-                ) => {
-                  const value = params.value;
-                  const chipColor =
-                    value === "completed"
-                      ? "success"
-                      : value === "in progress"
-                      ? "info"
-                      : "warning";
+    () => [
+      {
+        field: "title",
+        headerName: "Title",
+        flex: 1,
+        renderCell: (params: GridRenderCellParams<Task, string>) => {
+          const due = toDate(params.row.dueDate);
+          const isLate =
+            !!due &&
+            due.getTime() < Date.now() &&
+            params.row.status !== "completed";
 
-                  const label =
-                    value === "in progress"
-                      ? "In progress"
-                      : value === "completed"
-                      ? "Completed"
-                      : "Pending";
+          return (
+            <Stack direction="row" spacing={1} alignItems="center">
+              {isLate ? (
+                <Tooltip title="Overdue" placement="top" arrow>
+                  <NotificationImportantRounded
+                    fontSize="small"
+                    color="error"
+                    className="overdueVibrate"
+                  />
+                </Tooltip>
+              ) : null}
+              <span>{params.value ?? params.row.title}</span>
+            </Stack>
+          );
+        },
+      },
+      {
+        field: "description",
+        headerName: "Description",
+        flex: 2,
+        sortable: false,
+      },
+      {
+        field: "status",
+        headerName: "Status",
+        width: 140,
+        renderCell: (params: GridRenderCellParams<Task, Task["status"]>) => {
+          const value = params.value;
+          const chipColor =
+            value === "completed"
+              ? "success"
+              : value === "in progress"
+              ? "info"
+              : "warning";
 
-                  return (
-                    <Chip
-                      size="small"
-                      sx={{ justifySelf: "center" }}
-                      label={label}
-                      color={chipColor}
-                    />
-                  );
-                },
-              },
-            ]
-          : []),
-        ...(viewColumns.find((c) => c.field === "dueDate")?.view
-          ? [
-              {
-                field: "dueDate",
-                headerName: "Due",
-                type: "dateTime",
-                width: 180,
-                valueGetter: (params: any) => {
-                  const raw = params?.row?.dueDate ?? params?.value;
-                  return raw instanceof Date ? raw : raw ? new Date(raw) : null;
-                },
-              },
-            ]
-          : []),
-        ...(viewColumns.find((c) => c.field === "createdAt")?.view
-          ? [
-              {
-                field: "createdAt",
-                headerName: "Created",
-                type: "dateTime",
-                width: 180,
-                valueGetter: (params: any) => {
-                  const raw = params?.row?.createdAt ?? params?.value;
-                  return raw instanceof Date
-                    ? raw
-                    : raw
-                    ? new Date(raw)
-                    : new Date();
-                },
-              },
-            ]
-          : []),
-        ...(viewColumns.find((c) => c.field === "modifiedAt")?.view
-          ? [
-              {
-                field: "modifiedAt",
-                headerName: "Modified",
-                type: "dateTime",
-                width: 180,
-                valueGetter: (params: any) => {
-                  const raw = params?.row?.modifiedAt ?? params?.value;
-                  return raw instanceof Date
-                    ? raw
-                    : raw
-                    ? new Date(raw)
-                    : new Date();
-                },
-              },
-            ]
-          : []),
-      ].filter(Boolean) as GridColDef<Task>[],
-    [viewColumns],
+          const label =
+            value === "in progress"
+              ? "In progress"
+              : value === "completed"
+              ? "Completed"
+              : "Pending";
+
+          return (
+            <Chip
+              size="small"
+              sx={{ justifySelf: "center" }}
+              label={label}
+              color={chipColor}
+            />
+          );
+        },
+      },
+      {
+        field: "dueDate",
+        headerName: "Due",
+        type: "dateTime",
+        width: 180,
+        valueGetter: (value: unknown, row: Task): Date | null => {
+          return toDate(row?.dueDate ?? value);
+        },
+        renderCell: (params: GridRenderCellParams<Task, Date | null>) => {
+          const due = toDate(params.row.dueDate);
+          if (!due) return "";
+
+          const relative = formatRelativeDue(due, params.row.status);
+          const absolute = due.toLocaleString();
+
+          return (
+            <Tooltip title={absolute} placement="top" arrow>
+              <span>{relative}</span>
+            </Tooltip>
+          );
+        },
+      },
+      {
+        field: "createdAt",
+        headerName: "Created",
+        type: "dateTime",
+        width: 180,
+        valueGetter: (value: unknown, row: Task): Date | null => {
+          return toDate(row?.createdAt ?? value);
+        },
+      },
+      {
+        field: "modifiedAt",
+        headerName: "Modified",
+        type: "dateTime",
+        width: 180,
+        valueGetter: (value: unknown, row: Task): Date | null => {
+          return toDate(row?.modifiedAt ?? value);
+        },
+      },
+      {
+        field: "actions",
+        headerName: "Actions",
+        width: 140,
+        maxWidth: 140,
+        minWidth: 140,
+        sortable: false,
+        filterable: false,
+        disableColumnMenu: true,
+        hideable: false,
+        align: "center",
+        headerAlign: "center",
+        renderCell: (params: GridRenderCellParams<Task>) => (
+          <Stack
+            direction="row"
+            spacing={0.5}
+            justifyContent="center"
+            alignItems="center"
+            height={"100%"}
+          >
+            <Tooltip title="View" placement="top" arrow>
+              <IconButton
+                size="small"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedTask(params.row);
+                  setIsReadOnly(true);
+                  setIsDialogOpen(true);
+                }}
+              >
+                <VisibilityRounded fontSize="small" />
+              </IconButton>
+            </Tooltip>
+
+            <Tooltip title="Edit" placement="top" arrow>
+              <IconButton
+                size="small"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedTask(params.row);
+                  setIsReadOnly(false);
+                  setIsDialogOpen(true);
+                }}
+              >
+                <EditRounded fontSize="small" />
+              </IconButton>
+            </Tooltip>
+
+            <Tooltip title="Delete" placement="top" arrow>
+              <IconButton
+                size="small"
+                color="error"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const idToDelete = params.row._id;
+                  setTasks((prev) => prev.filter((t) => t._id !== idToDelete));
+                  setSelectedTask((prev) => {
+                    if (prev?._id !== idToDelete) return prev;
+                    setIsReadOnly(true);
+                    setIsDialogOpen(false);
+                    return null;
+                  });
+                }}
+              >
+                <DeleteRounded fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          </Stack>
+        ),
+      },
+    ],
+    [columnVisibilityModel],
   );
 
   const filteredTasks = useMemo(() => {
@@ -254,9 +376,11 @@ function App() {
       try {
         const response = await fetchTasks();
         setTasks(response.tasks);
+        setIsUsingDemoData(false);
       } catch (error) {
         // console.error("Error fetching tasks:", error);
         // Demo fallback when the API is unavailable.
+        setIsUsingDemoData(true);
         setTasks(demoTasks);
       }
     };
@@ -269,7 +393,8 @@ function App() {
         direction="row"
         spacing={2}
         justifyContent={"space-between"}
-        mb={2}>
+        mb={2}
+      >
         <Typography variant="h5" component="h5">
           DTS Case Worker Tasks
         </Typography>
@@ -286,7 +411,8 @@ function App() {
               dueDate: new Date(),
             });
             setIsDialogOpen(true);
-          }}>
+          }}
+        >
           New Task
         </Button>
       </Stack>
@@ -318,34 +444,33 @@ function App() {
             if (newView !== null) {
               setView(newView);
             }
-          }}>
+          }}
+        >
           <Tooltip
             title="List view with sorting and pagination"
-            placement="top">
+            placement="top"
+          >
             <ToggleButton value="list" sx={{ width: 56 }}>
               <ViewListRounded />
             </ToggleButton>
           </Tooltip>
           <Tooltip
             title="Kanban-style board for drag-and-drop task management"
-            placement="top">
+            placement="top"
+          >
             <ToggleButton value="kanban" sx={{ width: 56 }}>
               <ViewKanbanRounded />
             </ToggleButton>
           </Tooltip>
         </ToggleButtonGroup>
-        <IconButton
-          color="primary"
-          sx={{ width: 56 }}
-          onClick={(e) => setSettingsAnchorEl(e.currentTarget)}>
-          <Settings />
-        </IconButton>
       </Stack>
       <Box flexGrow={1} sx={{ mt: 2, height: 560, width: "100%" }}>
         {view === "list" && filteredTasks.length ? (
           <DataGrid
             rows={filteredTasks}
             columns={columns}
+            columnVisibilityModel={columnVisibilityModel}
+            onColumnVisibilityModelChange={setColumnVisibilityModel}
             getRowId={(row) =>
               row._id ? row._id : Math.random().toString(36).substr(2, 9)
             }
@@ -354,24 +479,44 @@ function App() {
               setIsReadOnly(true);
               setIsDialogOpen(true);
             }}
-            initialState={{
-              pagination: {
-                paginationModel: { pageSize: 10, page: 0 },
-              },
+            paginationModel={paginationModel}
+            onPaginationModelChange={(model) => {
+              setPaginationModel(model);
+              if (model.pageSize !== paginationModel.pageSize) {
+                sessionStorage.setItem(
+                  pageSizeStorageKey,
+                  String(model.pageSize),
+                );
+              }
             }}
             pageSizeOptions={[5, 10, 25]}
+            slots={{ toolbar: GridToolbar }}
           />
-        ) : (
-          <Stack direction="row" spacing={2} justifyContent={"space-between"}>
+        ) : view === "kanban" ? (
+          <Stack
+            direction="row"
+            spacing={2}
+            justifyContent={"space-between"}
+            sx={{ height: "100%", overflow: "hidden" }}
+          >
             {statuses.map((status) => (
               <Box
                 key={status}
                 sx={{
                   flex: 1,
                   border: "1px solid",
-                  borderColor: "divider",
+                  borderColor:
+                    status === "completed"
+                      ? "success.main"
+                      : status === "in progress"
+                      ? "info.main"
+                      : "warning.main",
                   borderRadius: 1,
-                  p: 1,
+                  pl: 1,
+                  pr: 0.5,
+                  py: 1,
+                  display: "flex",
+                  flexDirection: "column",
                 }}
                 onDragOver={(e) => {
                   e.preventDefault();
@@ -384,18 +529,28 @@ function App() {
                     e.dataTransfer.getData("text/plain");
                   if (!taskId) return;
                   moveTaskToStatus(taskId, status);
-                }}>
+                }}
+              >
                 <Typography variant="h6" component="h6" mb={1}>
                   {status.toUpperCase()}
                 </Typography>
-                <Stack spacing={1}>
+                <Stack
+                  spacing={1}
+                  sx={{
+                    height: "calc(100% - 48px)",
+                    overflowY: "auto",
+                    pl: "2px",
+                    pt: "2px",
+                    pr: 0.75,
+                    pb: 1,
+                  }}
+                >
                   {filteredTasks
                     .filter((t) => t.status === status)
                     .map((task) => (
                       <Card
                         key={task._id}
-                        variant="elevation"
-                        elevation={2}
+                        variant="outlined"
                         draggable
                         onDragStart={(e) => {
                           e.dataTransfer.setData(
@@ -404,41 +559,111 @@ function App() {
                           );
                           e.dataTransfer.setData("text/plain", task._id ?? "");
                           e.dataTransfer.effectAllowed = "move";
-                        }}>
+                        }}
+                        sx={{
+                          opacity: task.status === status ? 1 : 0.5,
+                          cursor: "move",
+                          minHeight: 111,
+                          borderColor:
+                            new Date(task.dueDate).getTime() < Date.now() &&
+                            task.status !== "completed"
+                              ? "error.main"
+                              : "#aaa",
+                        }}
+                      >
                         <CardContent sx={{ p: 1 }}>
-                          <Typography variant="subtitle1" component="h3">
-                            {task.title}
-                          </Typography>
-                          <Typography variant="body2" color="text.secondary">
-                            Due:{" "}
-                            {new Date(task.dueDate).toLocaleDateString(
-                              undefined,
-                              {
-                                year: "numeric",
-                                month: "short",
-                                day: "numeric",
-                              },
-                            )}
-                          </Typography>
+                          <Stack
+                            direction="row"
+                            spacing={1}
+                            alignItems="center"
+                            justifyContent="center"
+                          >
+                            {new Date(task.dueDate).getTime() < Date.now() &&
+                            task.status !== "completed" ? (
+                              <Tooltip title="Overdue" placement="top" arrow>
+                                <NotificationImportantRounded
+                                  fontSize="small"
+                                  color="error"
+                                  className="overdueVibrate"
+                                />
+                              </Tooltip>
+                            ) : null}
+                            <Typography variant="subtitle1" component="h3">
+                              {task.title}
+                            </Typography>
+                          </Stack>
+                          <Tooltip
+                            title={new Date(task.dueDate).toLocaleString()}
+                            placement="bottom"
+                            arrow
+                          >
+                            <Typography
+                              variant="body2"
+                              color={
+                                new Date(task.dueDate).getTime() < Date.now() &&
+                                task.status !== "completed"
+                                  ? "error"
+                                  : "text.secondary"
+                              }
+                              fontWeight={
+                                new Date(task.dueDate).getTime() < Date.now() &&
+                                task.status !== "completed"
+                                  ? "bold"
+                                  : "normal"
+                              }
+                            >
+                              {status !== "completed" ? `Due: ` : `Completed: `}
+                              <span>
+                                {formatRelativeDue(
+                                  new Date(task.dueDate),
+                                  task.status,
+                                )}
+                              </span>
+                            </Typography>
+                          </Tooltip>
                         </CardContent>
                         <CardActions>
+                          <Stack direction="row" spacing={1} flexGrow={1}>
+                            <Button
+                              size="small"
+                              variant="contained"
+                              onClick={() => {
+                                setSelectedTask(task);
+                                setIsReadOnly(true);
+                                setIsDialogOpen(true);
+                              }}
+                            >
+                              View
+                            </Button>
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              onClick={() => {
+                                setSelectedTask(task);
+                                setIsReadOnly(false);
+                                setIsDialogOpen(true);
+                              }}
+                            >
+                              Edit
+                            </Button>
+                          </Stack>
                           <Button
                             size="small"
+                            color="error"
                             onClick={() => {
-                              setSelectedTask(task);
-                              setIsReadOnly(true);
-                              setIsDialogOpen(true);
-                            }}>
-                            View
-                          </Button>
-                          <Button
-                            size="small"
-                            onClick={() => {
-                              setSelectedTask(task);
-                              setIsReadOnly(false);
-                              setIsDialogOpen(true);
-                            }}>
-                            Edit
+                              const idToDelete = task._id;
+                              setTasks((prev) =>
+                                prev.filter((t) => t._id !== idToDelete),
+                              );
+                              setSelectedTask((prev) => {
+                                if (prev?._id !== idToDelete) return prev;
+                                setIsReadOnly(true);
+                                setIsDialogOpen(false);
+                                return null;
+                              });
+                            }}
+                          >
+                            Delete
                           </Button>
                         </CardActions>
                       </Card>
@@ -447,13 +672,20 @@ function App() {
               </Box>
             ))}
           </Stack>
+        ) : (
+          <Stack spacing={1}>
+            <Skeleton variant="rounded" width="100%" height={100} />
+            <Skeleton variant="rounded" width="100%" height={60} />
+            <Skeleton variant="rounded" width="100%" height={30} />
+          </Stack>
         )}
       </Box>
       <Dialog
         open={isDialogOpen}
         onClose={() => setIsDialogOpen(false)}
         maxWidth="md"
-        fullWidth>
+        fullWidth
+      >
         <DialogTitle>Task Details</DialogTitle>
         <DialogContent>
           {selectedTask ? (
@@ -495,7 +727,8 @@ function App() {
                   if (newStatus) {
                     setSelectedTask({ ...selectedTask, status: newStatus });
                   }
-                }}>
+                }}
+              >
                 <ToggleButton value="pending" fullWidth>
                   Pending
                 </ToggleButton>
@@ -530,13 +763,15 @@ function App() {
               <Button
                 onClick={() => setIsReadOnly(false)}
                 color="primary"
-                variant="outlined">
+                variant="outlined"
+              >
                 Edit
               </Button>
               <Button
                 onClick={() => setIsDialogOpen(false)}
                 color="inherit"
-                variant="outlined">
+                variant="outlined"
+              >
                 Close
               </Button>
             </>
@@ -552,41 +787,31 @@ function App() {
           )}
         </DialogActions>
       </Dialog>
-      <Popover
-        open={isSettingsOpen}
-        anchorEl={settingsAnchorEl}
-        onClose={() => setSettingsAnchorEl(null)}
+      <Snackbar
+        open={isUsingDemoData}
+        onClose={() => setIsUsingDemoData(false)}
+        slotProps={{
+          clickAwayListener: {
+            onClickAway: (event: any) => {
+              (
+                event as Event & { defaultMuiPrevented?: boolean }
+              ).defaultMuiPrevented = true;
+            },
+          },
+        }}
         anchorOrigin={{
-          vertical: "bottom",
-          horizontal: "right",
-        }}>
-        <Box sx={{ width: 240 }}>
-          <Typography
-            variant="h6"
-            component="h3"
-            sx={{ p: 2 }}
-            textAlign={"center"}>
-            Column Visibility
-          </Typography>
-          <Divider />
-          <Stack spacing={1} sx={{ p: 2 }}>
-            {viewColumns.map((col) => (
-              <Chip
-                key={col.field}
-                label={col.field}
-                color={col.view ? "primary" : "default"}
-                onClick={() => {
-                  setViewColumns((prev) =>
-                    prev.map((c) =>
-                      c.field === col.field ? { ...c, view: !c.view } : c,
-                    ),
-                  );
-                }}
-              />
-            ))}
-          </Stack>
-        </Box>
-      </Popover>
+          vertical: "top",
+          horizontal: "center",
+        }}
+      >
+        <Alert
+          severity="warning"
+          sx={{ borderRadius: 3 }}
+          onClose={() => setIsUsingDemoData(false)}
+        >
+          Unable to fetch tasks from the API. Displaying demo data instead.
+        </Alert>
+      </Snackbar>
     </Stack>
   );
 }

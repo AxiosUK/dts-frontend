@@ -13,7 +13,7 @@ function hoursFrom(base: Date, hours: number): Date {
 }
 
 /**
- * Generates a realistic set of demo tasks for a case worker-style workflow.
+ * Generates a realistic set of demo tasks for an HMCTS-style administrative workflow.
  *
  * Note: `Task` uses `Date` fields (not ISO strings), so this data is intended
  * to be used in-memory on the frontend.
@@ -25,29 +25,29 @@ export function createDemoTasks(baseDate: Date = new Date()): Task[] {
   return [
     {
       _id: "demo-001",
-      title: "Review new referral and triage priority",
+      title: "Validate new online submission (case initiation)",
       description:
-        "Read referral notes, identify urgent safeguarding indicators, and assign an initial priority level.",
+        "Check mandatory fields, party details, and attached documents; return to applicant if information is missing.",
       status: "in progress",
-      dueDate: daysFrom(now, 1),
-      createdAt: daysFrom(now, -3),
-      modifiedAt: daysFrom(now, -1),
+      dueDate: hoursFrom(now, 6),
+      createdAt: daysFrom(now, -2),
+      modifiedAt: hoursFrom(now, -2),
     },
     {
       _id: "demo-002",
-      title: "Contact parent/guardian for consent",
+      title: "Check fee payment / remission evidence",
       description:
-        "Phone call + follow-up email to confirm consent for information sharing and appointments.",
+        "Confirm payment reference or fee remission evidence is present and readable; record outcome in the case file.",
       status: "pending",
-      dueDate: daysFrom(now, 2),
-      createdAt: daysFrom(now, -2),
-      modifiedAt: daysFrom(now, -2),
+      dueDate: daysFrom(now, 1),
+      createdAt: daysFrom(now, -1),
+      modifiedAt: daysFrom(now, -1),
     },
     {
       _id: "demo-003",
-      title: "Schedule initial meeting with student",
+      title: "Create hearing listing request",
       description:
-        "Book a 30-minute check-in during pastoral time; confirm room availability and notify tutor.",
+        "Request suitable listing slot, courtroom/venue (or remote hearing), and estimate time needed; include interpreter needs if provided.",
       status: "pending",
       dueDate: daysFrom(now, 3),
       createdAt: daysFrom(now, -2),
@@ -55,73 +55,93 @@ export function createDemoTasks(baseDate: Date = new Date()): Task[] {
     },
     {
       _id: "demo-004",
-      title: "Request and log supporting documents",
+      title: "Check service/contact details for all parties",
       description:
-        "Gather attendance summary, behaviour points, and recent assessment results; attach to case record.",
+        "Verify email/postal addresses and representation details; flag any missing information for follow-up to support timely notifications.",
       status: "in progress",
-      dueDate: daysFrom(now, 4),
-      createdAt: daysFrom(now, -6),
-      modifiedAt: daysFrom(now, -1),
+      dueDate: daysFrom(now, 2),
+      createdAt: daysFrom(now, -5),
+      modifiedAt: hoursFrom(now, -5),
     },
     {
       _id: "demo-005",
-      title: "Update safety/risk assessment",
+      title: "Upload and label documents in digital case file",
       description:
-        "Complete the risk checklist based on referral details and any disclosures; escalate if required.",
+        "Ensure documents are correctly categorised (application, evidence, correspondence) and are OCR/readable; add short descriptions for accessibility.",
       status: "pending",
-      dueDate: daysFrom(now, 1),
+      dueDate: daysFrom(now, 2),
       createdAt: daysFrom(now, -1),
       modifiedAt: daysFrom(now, -1),
     },
     {
       _id: "demo-006",
-      title: "Write case note from initial contact",
+      title: "Send hearing notice to parties",
       description:
-        "Record date/time, summary of conversation, actions agreed, and next steps.",
+        "Generate and send hearing notice via the chosen channel; record delivery attempt and any bounce-backs.",
       status: "completed",
-      dueDate: daysFrom(now, -1),
-      createdAt: daysFrom(now, -7),
-      modifiedAt: daysFrom(now, -5),
+      dueDate: daysFrom(now, -2),
+      createdAt: daysFrom(now, -6),
+      modifiedAt: daysFrom(now, -2),
     },
     {
       _id: "demo-007",
-      title: "Develop draft support plan",
+      title: "Prepare digital hearing bundle (draft)",
       description:
-        "Create a short-term plan with goals, strategies, responsible staff, and review date.",
+        "Collate key documents into the bundle order and check pagination; note any missing items for follow-up.",
       status: "pending",
-      dueDate: daysFrom(now, 7),
-      createdAt: daysFrom(now, -1),
-      modifiedAt: daysFrom(now, -1),
+      dueDate: daysFrom(now, 5),
+      createdAt: daysFrom(now, -3),
+      modifiedAt: daysFrom(now, -3),
     },
     {
       _id: "demo-008",
-      title: "Coordinate external agency referral",
+      title: "Handle reasonable adjustment / accessibility request",
       description:
-        "Prepare referral summary and send to appropriate service; track acknowledgement and appointment details.",
+        "Record requested adjustments (e.g., hearing loop, step-free access, communication support) and notify listing/admin teams.",
       status: "pending",
-      dueDate: daysFrom(now, 10),
+      dueDate: daysFrom(now, 4),
       createdAt: daysFrom(now, -1),
       modifiedAt: daysFrom(now, -1),
     },
     {
       _id: "demo-009",
-      title: "Prepare agenda for multi-agency meeting",
+      title: "Respond to inbound query (status update request)",
       description:
-        "Draft agenda items, compile key updates, and circulate to attendees 24 hours beforehand.",
+        "Reply to party/representative via digital channel with an administrative update and signposting; avoid comment on judicial decision-making.",
       status: "in progress",
-      dueDate: daysFrom(now, 5),
-      createdAt: daysFrom(now, -4),
-      modifiedAt: hoursFrom(now, -6),
+      dueDate: hoursFrom(now, 3),
+      createdAt: daysFrom(now, -3),
+      modifiedAt: hoursFrom(now, -1),
     },
     {
       _id: "demo-010",
-      title: "Follow up after appointment",
+      title: "Chase missing document after deadline",
       description:
-        "Check outcomes, update case record, and confirm next actions with the student and guardian.",
+        "Follow up with the relevant party to request the outstanding document; record action and set reminder.",
       status: "pending",
-      dueDate: daysFrom(now, 14),
-      createdAt: daysFrom(now, 0),
-      modifiedAt: daysFrom(now, 0),
+      dueDate: daysFrom(now, -1),
+      createdAt: daysFrom(now, -4),
+      modifiedAt: daysFrom(now, -2),
+    },
+    {
+      _id: "demo-011",
+      title: "Verify remote hearing link distribution",
+      description:
+        "Confirm video hearing link was shared with all parties and interpreters (if applicable); re-send and log where necessary.",
+      status: "in progress",
+      dueDate: hoursFrom(now, 8),
+      createdAt: daysFrom(now, -2),
+      modifiedAt: hoursFrom(now, -4),
+    },
+    {
+      _id: "demo-012",
+      title: "Close administrative task after outcome recorded",
+      description:
+        "Once the outcome is recorded in the case management system, update admin checklist, ensure documents are filed, and mark task complete.",
+      status: "completed",
+      dueDate: daysFrom(now, -3),
+      createdAt: daysFrom(now, -8),
+      modifiedAt: daysFrom(now, -3),
     },
   ];
 }
