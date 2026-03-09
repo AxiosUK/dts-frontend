@@ -143,8 +143,12 @@ function App() {
         status: selectedTask.status,
         dueDate: selectedTask.dueDate,
       });
+      const response = await fetchTasks();
+      setTasks(response.tasks);
     } else {
       await updateTask(selectedTask._id!, selectedTask);
+      const response = await fetchTasks();
+      setTasks(response.tasks);
     }
     setIsReadOnly(true);
     setIsDialogOpen(false);
@@ -350,14 +354,23 @@ function App() {
                 color="error"
                 onClick={(e) => {
                   e.stopPropagation();
-                  const idToDelete = params.row._id;
-                  setTasks((prev) => prev.filter((t) => t._id !== idToDelete));
-                  setSelectedTask((prev) => {
-                    if (prev?._id !== idToDelete) return prev;
-                    setIsReadOnly(true);
-                    setIsDialogOpen(false);
-                    return null;
-                  });
+                  if (isUsingDemoData) {
+                    const idToDelete = params.row._id;
+                    setTasks((prev) =>
+                      prev.filter((t) => t._id !== idToDelete),
+                    );
+                    setSelectedTask((prev) => {
+                      if (prev?._id !== idToDelete) return prev;
+                      setIsReadOnly(true);
+                      setIsDialogOpen(false);
+                      return null;
+                    });
+                  } else {
+                    deleteTask(params.row._id!);
+                    setTasks((prev) =>
+                      prev.filter((t) => t._id !== params.row._id),
+                    );
+                  }
                 }}>
                 <DeleteRounded fontSize="small" />
               </IconButton>

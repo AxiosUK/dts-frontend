@@ -66,7 +66,7 @@ jobs:
           if ! grep -q "org.opencontainers.image.version" docker-compose.yaml; then
             sed -i "/image: axiosuk\/dts-frontend:${VERSION}/a\    labels:\n      - \"org.opencontainers.image.version=${VERSION}\"" docker-compose.yaml
           else
-            sed -i "s|org.opencontainers.image.version=.*|org.opencontainers.image.version=${VERSION}|" docker-compose.yaml || true
+            sed -i "s|org.opencontainers.image.version=.*|org.opencontainers.image.version=${VERSION}|"" docker-compose.yaml || true
           fi
           git add docker-compose.yaml
           git commit -m "chore(release): docker-compose semver ${VERSION}" || echo "no docker-compose changes"
