@@ -60,14 +60,25 @@ jobs:
           git config user.email "github-actions@github.com"
           git checkout main
           git pull origin main
-          # Replace image tag
-          sed -i "s|image: axiosuk/dts-frontend:.*|image: axiosuk/dts-frontend:${VERSION}|" docker-compose.yaml
-          # Add or update semver label under the service
-          if ! grep -q "org.opencontainers.image.version" docker-compose.yaml; then
-            sed -i "/image: axiosuk\/dts-frontend:${VERSION}/a\    labels:\n      - \"org.opencontainers.image.version=${VERSION}\"" docker-compose.yaml
-          else
-            sed -i "s|org.opencontainers.image.version=.*|org.opencontainers.image.version=${VERSION}|"" docker-compose.yaml || true
-          fi
+          # Replace image tag and safely add/update semver label using Node (avoids sed escaping issues)
+          VERSION=$(node -p "require('./package.json').version")
+          export VERSION
+          node - <<'NODE'
+          const fs = require('fs');
+          const path = 'docker-compose.yaml';
+          let s = fs.readFileSync(path, 'utf8');
+          const v = process.env.VERSION;
+          // Replace the image tag for the service
+          s = s.replace(/image: axiosuk\/dts-frontend:.*$/m, `image: axiosuk/dts-frontend:${v}`);
+          if (!/org\.opencontainers\.image\.version/.test(s)) {
+            // Insert labels block after the image line for that service
+            s = s.replace(new RegExp(`(image: axiosuk\\/dts-frontend:${v})(\\n)`), `$1$2    labels:\n      - "org.opencontainers.image.version=${v}"$2`);
+          } else {
+            // Update existing label value
+            s = s.replace(/org\.opencontainers\.image\.version=.*$/m, `org.opencontainers.image.version=${v}`);
+          }
+          fs.writeFileSync(path, s, 'utf8');
+          NODE
           git add docker-compose.yaml
           git commit -m "chore(release): docker-compose semver ${VERSION}" || echo "no docker-compose changes"
           git push origin main
