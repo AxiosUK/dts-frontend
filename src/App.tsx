@@ -42,7 +42,7 @@ import {
   type GridRenderCellParams,
 } from "@mui/x-data-grid";
 import type Task from "./models/task";
-import { fetchTasks } from "./api/api";
+import { fetchTasks, createTask, updateTask, deleteTask } from "./api/api";
 import { demoTasks } from "./models/demoTasks";
 import dayjs from "dayjs";
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
@@ -57,6 +57,8 @@ function App() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isReadOnly, setIsReadOnly] = useState(true);
   const [isUsingDemoData, setIsUsingDemoData] = useState(false);
+  const [isNewTask, setIsNewTask] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   const [columnVisibilityModel, setColumnVisibilityModel] =
     useState<GridColumnVisibilityModel>({
@@ -106,32 +108,44 @@ function App() {
     }
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!selectedTask) return;
 
     const now = new Date();
 
-    if (selectedTask._id) {
-      // update existing task
-      setTasks((prev) =>
-        prev.map((t) =>
-          t._id === selectedTask._id ? { ...selectedTask, modifiedAt: now } : t,
-        ),
-      );
-      setSelectedTask({ ...selectedTask, modifiedAt: now });
+    if (isUsingDemoData) {
+      if (selectedTask._id) {
+        // update existing task
+        setTasks((prev) =>
+          prev.map((t) =>
+            t._id === selectedTask._id
+              ? { ...selectedTask, modifiedAt: now }
+              : t,
+          ),
+        );
+        setSelectedTask({ ...selectedTask, modifiedAt: now });
+      } else {
+        // create new task
+        const id = Math.random().toString(36).substr(2, 9);
+        const newTask: Task = {
+          ...selectedTask,
+          _id: id,
+          createdAt: now,
+          modifiedAt: now,
+        };
+        setTasks((prev) => [newTask, ...prev]);
+        setSelectedTask(newTask);
+      }
+    } else if (isNewTask) {
+      await createTask({
+        title: selectedTask.title,
+        description: selectedTask.description,
+        status: selectedTask.status,
+        dueDate: selectedTask.dueDate,
+      });
     } else {
-      // create new task
-      const id = Math.random().toString(36).substr(2, 9);
-      const newTask: Task = {
-        ...selectedTask,
-        _id: id,
-        createdAt: now,
-        modifiedAt: now,
-      };
-      setTasks((prev) => [newTask, ...prev]);
-      setSelectedTask(newTask);
+      await updateTask(selectedTask._id!, selectedTask);
     }
-
     setIsReadOnly(true);
     setIsDialogOpen(false);
   };
@@ -302,8 +316,7 @@ function App() {
             spacing={0.5}
             justifyContent="center"
             alignItems="center"
-            height={"100%"}
-          >
+            height={"100%"}>
             <Tooltip title="View" placement="top" arrow>
               <IconButton
                 size="small"
@@ -312,8 +325,7 @@ function App() {
                   setSelectedTask(params.row);
                   setIsReadOnly(true);
                   setIsDialogOpen(true);
-                }}
-              >
+                }}>
                 <VisibilityRounded fontSize="small" />
               </IconButton>
             </Tooltip>
@@ -324,10 +336,10 @@ function App() {
                 onClick={(e) => {
                   e.stopPropagation();
                   setSelectedTask(params.row);
+                  setIsNewTask(false);
                   setIsReadOnly(false);
                   setIsDialogOpen(true);
-                }}
-              >
+                }}>
                 <EditRounded fontSize="small" />
               </IconButton>
             </Tooltip>
@@ -346,8 +358,7 @@ function App() {
                     setIsDialogOpen(false);
                     return null;
                   });
-                }}
-              >
+                }}>
                 <DeleteRounded fontSize="small" />
               </IconButton>
             </Tooltip>
@@ -373,6 +384,7 @@ function App() {
   useEffect(() => {
     // Fetch tasks from the backend API
     const getTasks = async () => {
+      setIsLoading(true);
       try {
         const response = await fetchTasks();
         setTasks(response.tasks);
@@ -383,6 +395,7 @@ function App() {
         setIsUsingDemoData(true);
         setTasks(demoTasks);
       }
+      setIsLoading(false);
     };
     getTasks();
   }, []);
@@ -393,8 +406,7 @@ function App() {
         direction="row"
         spacing={2}
         justifyContent={"space-between"}
-        mb={2}
-      >
+        mb={2}>
         <Typography variant="h5" component="h5">
           DTS Case Worker Tasks
         </Typography>
@@ -404,6 +416,7 @@ function App() {
           startIcon={<Add />}
           onClick={() => {
             setIsReadOnly(false);
+            setIsNewTask(true);
             setSelectedTask({
               title: "",
               description: "",
@@ -411,8 +424,7 @@ function App() {
               dueDate: new Date(),
             });
             setIsDialogOpen(true);
-          }}
-        >
+          }}>
           New Task
         </Button>
       </Stack>
@@ -444,20 +456,17 @@ function App() {
             if (newView !== null) {
               setView(newView);
             }
-          }}
-        >
+          }}>
           <Tooltip
             title="List view with sorting and pagination"
-            placement="top"
-          >
+            placement="top">
             <ToggleButton value="list" sx={{ width: 56 }}>
               <ViewListRounded />
             </ToggleButton>
           </Tooltip>
           <Tooltip
             title="Kanban-style board for drag-and-drop task management"
-            placement="top"
-          >
+            placement="top">
             <ToggleButton value="kanban" sx={{ width: 56 }}>
               <ViewKanbanRounded />
             </ToggleButton>
@@ -465,7 +474,13 @@ function App() {
         </ToggleButtonGroup>
       </Stack>
       <Box flexGrow={1} sx={{ mt: 2, height: 560, width: "100%" }}>
-        {view === "list" && filteredTasks.length ? (
+        {isLoading ? (
+          <Stack spacing={1}>
+            <Skeleton variant="rounded" width="100%" height={100} />
+            <Skeleton variant="rounded" width="100%" height={60} />
+            <Skeleton variant="rounded" width="100%" height={30} />
+          </Stack>
+        ) : view === "list" && filteredTasks.length ? (
           <DataGrid
             rows={filteredTasks}
             columns={columns}
@@ -476,6 +491,7 @@ function App() {
             }
             onRowClick={(params) => {
               setSelectedTask(params.row);
+              setIsNewTask(false);
               setIsReadOnly(true);
               setIsDialogOpen(true);
             }}
@@ -492,13 +508,12 @@ function App() {
             pageSizeOptions={[5, 10, 25]}
             slots={{ toolbar: GridToolbar }}
           />
-        ) : view === "kanban" ? (
+        ) : view === "kanban" && filteredTasks.length ? (
           <Stack
             direction="row"
             spacing={2}
             justifyContent={"space-between"}
-            sx={{ height: "100%", overflow: "hidden" }}
-          >
+            sx={{ height: "100%", overflow: "hidden" }}>
             {statuses.map((status) => (
               <Box
                 key={status}
@@ -529,8 +544,7 @@ function App() {
                     e.dataTransfer.getData("text/plain");
                   if (!taskId) return;
                   moveTaskToStatus(taskId, status);
-                }}
-              >
+                }}>
                 <Typography variant="h6" component="h6" mb={1}>
                   {status.toUpperCase()}
                 </Typography>
@@ -543,8 +557,7 @@ function App() {
                     pt: "2px",
                     pr: 0.75,
                     pb: 1,
-                  }}
-                >
+                  }}>
                   {filteredTasks
                     .filter((t) => t.status === status)
                     .map((task) => (
@@ -569,15 +582,13 @@ function App() {
                             task.status !== "completed"
                               ? "error.main"
                               : "#aaa",
-                        }}
-                      >
+                        }}>
                         <CardContent sx={{ p: 1 }}>
                           <Stack
                             direction="row"
                             spacing={1}
                             alignItems="center"
-                            justifyContent="center"
-                          >
+                            justifyContent="center">
                             {new Date(task.dueDate).getTime() < Date.now() &&
                             task.status !== "completed" ? (
                               <Tooltip title="Overdue" placement="top" arrow>
@@ -595,8 +606,7 @@ function App() {
                           <Tooltip
                             title={new Date(task.dueDate).toLocaleString()}
                             placement="bottom"
-                            arrow
-                          >
+                            arrow>
                             <Typography
                               variant="body2"
                               color={
@@ -610,8 +620,7 @@ function App() {
                                 task.status !== "completed"
                                   ? "bold"
                                   : "normal"
-                              }
-                            >
+                              }>
                               {status !== "completed" ? `Due: ` : `Completed: `}
                               <span>
                                 {formatRelativeDue(
@@ -629,10 +638,10 @@ function App() {
                               variant="contained"
                               onClick={() => {
                                 setSelectedTask(task);
+                                setIsNewTask(false);
                                 setIsReadOnly(true);
                                 setIsDialogOpen(true);
-                              }}
-                            >
+                              }}>
                               View
                             </Button>
                             <Button
@@ -640,29 +649,35 @@ function App() {
                               variant="outlined"
                               onClick={() => {
                                 setSelectedTask(task);
+                                setIsNewTask(false);
                                 setIsReadOnly(false);
                                 setIsDialogOpen(true);
-                              }}
-                            >
+                              }}>
                               Edit
                             </Button>
                           </Stack>
                           <Button
                             size="small"
                             color="error"
-                            onClick={() => {
+                            onClick={async () => {
                               const idToDelete = task._id;
-                              setTasks((prev) =>
-                                prev.filter((t) => t._id !== idToDelete),
-                              );
-                              setSelectedTask((prev) => {
-                                if (prev?._id !== idToDelete) return prev;
-                                setIsReadOnly(true);
-                                setIsDialogOpen(false);
-                                return null;
-                              });
-                            }}
-                          >
+                              if (isUsingDemoData) {
+                                setTasks((prev) =>
+                                  prev.filter((t) => t._id !== idToDelete),
+                                );
+                                setSelectedTask((prev) => {
+                                  if (prev?._id !== idToDelete) return prev;
+                                  setIsReadOnly(true);
+                                  setIsDialogOpen(false);
+                                  return null;
+                                });
+                              } else {
+                                await deleteTask(idToDelete!);
+                                setTasks((prev) =>
+                                  prev.filter((t) => t._id !== idToDelete),
+                                );
+                              }
+                            }}>
                             Delete
                           </Button>
                         </CardActions>
@@ -673,19 +688,16 @@ function App() {
             ))}
           </Stack>
         ) : (
-          <Stack spacing={1}>
-            <Skeleton variant="rounded" width="100%" height={100} />
-            <Skeleton variant="rounded" width="100%" height={60} />
-            <Skeleton variant="rounded" width="100%" height={30} />
-          </Stack>
+          <Typography variant="body1" align="center" sx={{ mt: 4 }}>
+            No tasks found.
+          </Typography>
         )}
       </Box>
       <Dialog
         open={isDialogOpen}
         onClose={() => setIsDialogOpen(false)}
         maxWidth="md"
-        fullWidth
-      >
+        fullWidth>
         <DialogTitle>Task Details</DialogTitle>
         <DialogContent>
           {selectedTask ? (
@@ -727,8 +739,7 @@ function App() {
                   if (newStatus) {
                     setSelectedTask({ ...selectedTask, status: newStatus });
                   }
-                }}
-              >
+                }}>
                 <ToggleButton value="pending" fullWidth>
                   Pending
                 </ToggleButton>
@@ -763,15 +774,13 @@ function App() {
               <Button
                 onClick={() => setIsReadOnly(false)}
                 color="primary"
-                variant="outlined"
-              >
+                variant="outlined">
                 Edit
               </Button>
               <Button
                 onClick={() => setIsDialogOpen(false)}
                 color="inherit"
-                variant="outlined"
-              >
+                variant="outlined">
                 Close
               </Button>
             </>
@@ -802,13 +811,11 @@ function App() {
         anchorOrigin={{
           vertical: "top",
           horizontal: "center",
-        }}
-      >
+        }}>
         <Alert
           severity="warning"
           sx={{ borderRadius: 3 }}
-          onClose={() => setIsUsingDemoData(false)}
-        >
+          onClose={() => setIsUsingDemoData(false)}>
           Unable to fetch tasks from the API. Displaying demo data instead.
         </Alert>
       </Snackbar>
