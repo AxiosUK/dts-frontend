@@ -1,8 +1,8 @@
 services:
   web:
-    image: axiosuk/dts-frontend:0.0.0
+    image: axiosuk/dts-frontend:1.0.0
     labels:
-      - "org.opencontainers.image.version=0.0.0"
+      - "org.opencontainers.image.version=1.0.0
     container_name: dts-frontend
     environment:
       - API_BASE_URL=https://api.example.com
