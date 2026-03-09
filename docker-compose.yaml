@@ -2,7 +2,7 @@ services:
   web:
     image: ghcr.io/axiosuk/dts-frontend:1.1.0
     labels:
-      - "org.opencontainers.image.version=1.1.0
+      - "org.opencontainers.image.version=1.1.1
     container_name: dts-frontend
     environment:
       - API_BASE_URL=https://api.example.com
