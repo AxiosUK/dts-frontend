@@ -1,40 +1,56 @@
 name: Build & Push Docker Image
 
+permissions:
+  contents: read
+  packages: write
+
 on:
   workflow_run:
     workflows: ["Release"]
     types:
       - completed
+  workflow_dispatch:
 
 jobs:
   build:
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
-
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - uses: docker/setup-buildx-action@v3
-
-      - uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_PASSWORD }}
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
       - name: Get latest tag
         id: version
         run: |
-          git fetch --tags
-          VERSION=$(git describe --tags --abbrev=0 | sed 's/^v//')
-          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          git fetch --tags --force
+          TAG=$(git describe --tags $(git rev-list --tags --max-count=1))
+          if [ -z "$TAG" ]; then
+            echo "No git tags found; cannot determine version" >&2
+            exit 1
+          fi
+          VERSION=${TAG#v}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
 
-      - uses: docker/build-push-action@v5
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create lowercase owner env
+        run: |
+          echo "OWNER_LOWER=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
         with:
           context: .
           push: true
+          tags: ghcr.io/${{ env.OWNER_LOWER }}/dts-frontend:${{ steps.version.outputs.version }},ghcr.io/${{ env.OWNER_LOWER }}/dts-frontend:latest
           platforms: linux/amd64,linux/arm64
-          tags: |
-            axiosuk/dts-frontend:${{ steps.version.outputs.VERSION }}
-            axiosuk/dts-frontend:latest
