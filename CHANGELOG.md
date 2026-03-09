@@ -1,5 +1,11 @@
 # dts-frontend
 
+## 1.1.0
+
+### Minor Changes
+
+- f1d0ecc: Added real api use and connections for handling create, update, and delete.
+
 ## 1.0.0
 
 ### Major Changes
