@@ -1,5 +1,11 @@
 # dts-frontend
 
+## 1.1.1
+
+### Patch Changes
+
+- ba6fe14: Added UI updates on create, update and delete
+
 ## 1.1.0
 
 ### Minor Changes
