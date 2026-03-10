@@ -4,6 +4,12 @@
 
 ### Patch Changes
 
+- 6aeffcb: Fixes
+
+## 1.1.1
+
+### Patch Changes
+
 - ba6fe14: Added UI updates on create, update and delete
 
 ## 1.1.0
