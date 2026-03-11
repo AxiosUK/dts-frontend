@@ -11,6 +11,8 @@ const runtimeApi = window.__ENV__?.API_BASE_URL;
 
 export const api = axios.create({
   baseURL: `${runtimeApi || "http://localhost:5000"}/main/v1`,
+  // Fail fast on unreachable backends to avoid hanging tests and UI initialization
+  timeout: 5000,
   headers: {
     "Content-Type": "application/json",
   },
