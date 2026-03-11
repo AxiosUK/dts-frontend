@@ -12,5 +12,8 @@ export default defineConfig({
     setupFiles: "src/setupTests.ts",
     globals: true,
     threads: true,
+    // Increase test timeout for slower CI environments when importing
+    // the real app (which loads many UI modules). 20s should be ample.
+    testTimeout: 20000,
   } as any,
 });
