@@ -6,7 +6,7 @@ Summary
 
 - Provides a lightweight task management UI for DTS case workers with both list and Kanban views.
 - Uses Material UI (`@mui/material` and `@mui/x-data-grid`) for a responsive, accessible interface.
-- Includes demo data and a simple API client with a fallback when the backend is unavailable.
+- Includes demo data and a simple API client with a fallback (non-persistent) when the backend is unavailable.
 
 Key features
 
@@ -39,4 +39,26 @@ Where to look
 
 License
 This project is provided as-is for development and demonstration purposes.
-files: ['**/*.{ts,tsx}'],
+
+**Testing**
+
+- Recommended: run tests inside WSL (or CI) to avoid Windows/OneDrive file-handle limits that can cause Vitest to hang or error (EMFILE).
+- Quick WSL steps:
+
+```bash
+# in WSL
+cd ~
+git clone https://github.com/axiosuk/dts-frontend.git
+cd dts-frontend
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+sudo apt-get install -y nodejs build-essential
+npm ci
+npm test -- --run --reporter=verbose
+```
+
+- CI: GitHub Actions (`.github/workflows/test.yml`) runs Vitest on Linux and will exercise the real `App` component.
+- Local Windows: if you prefer quick checks, run the `src/smoke.test.ts` test which doesn't import the full UI:
+
+```bash
+npx vitest run src/smoke.test.ts
+```

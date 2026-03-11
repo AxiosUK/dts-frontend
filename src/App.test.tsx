@@ -13,7 +13,9 @@ vi.mock("./api/api", async () => {
 });
 
 test("renders app header and a demo task", async () => {
-  const { default: App } = await import("./App.teststub");
+  // Dynamically import the real App component. Tests run fastest in WSL/CI;
+  // running locally on Windows/OneDrive may be slow or hit file-handle limits.
+  const { default: App } = await import("./App");
   render(<App />);
   expect(screen.getByText(/DTS Case Worker Tasks/i)).toBeInTheDocument();
 
