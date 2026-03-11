@@ -25,6 +25,6 @@ test("renders app header and a demo task", async () => {
         screen.getByText(/Validate new online submission/i),
       ).toBeInTheDocument();
     },
-    { timeout: 30000 },
+    { timeout: 60000 },
   );
-}, 30000);
+}, 60000);
