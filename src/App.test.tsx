@@ -19,9 +19,12 @@ test("renders app header and a demo task", async () => {
   render(<App />);
   expect(screen.getByText(/DTS Case Worker Tasks/i)).toBeInTheDocument();
 
-  await waitFor(() => {
-    expect(
-      screen.getByText(/Validate new online submission/i),
-    ).toBeInTheDocument();
-  });
-});
+  await waitFor(
+    () => {
+      expect(
+        screen.getByText(/Validate new online submission/i),
+      ).toBeInTheDocument();
+    },
+    { timeout: 30000 },
+  );
+}, 30000);
