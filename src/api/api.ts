@@ -1,5 +1,6 @@
 import axios from "axios";
 import type Task from "../models/task";
+import { demoTasks } from "../models/demoTasks";
 
 declare global {
   interface Window {
@@ -19,14 +20,22 @@ export const api = axios.create({
 });
 
 export const fetchTasks = async () => {
+  // In dev mode return demo tasks immediately to speed local dev startup.
+  // Use Vite's `import.meta.env.DEV` which is true when running `vite`.
+  if (typeof import.meta !== "undefined" && (import.meta as any).env?.DEV) {
+    return { tasks: demoTasks };
+  }
+
   try {
     const response = await api.get("/tasks");
     return response.data;
   } catch (error) {
     if (axios.isAxiosError(error) && error.response?.status === 404) {
       console.warn("API endpoint not found (404). Falling back to demo data.");
+      return { tasks: demoTasks };
     } else {
       console.error("Error fetching tasks:", error);
+      return { tasks: demoTasks };
     }
   }
 };
