@@ -1,5 +1,12 @@
 # dts-frontend
 
+## 1.1.2
+
+### Patch Changes
+
+- 119a831: Bug fixes to unit testing
+- 119a831: Update README.md
+
 ## 1.1.1
 
 ### Patch Changes
